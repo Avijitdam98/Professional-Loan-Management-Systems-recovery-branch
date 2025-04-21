@@ -1,66 +1,73 @@
 import {
+  AccountCircle,
+  AttachMoney,
+  Cancel,
+  CheckCircle,
+  Dashboard as DashboardIcon,
+  FilterList,
+  Home,
+  Logout,
+  Notifications,
+  Pending,
+  PictureAsPdf,
+  Score,
+  Search,
+  Settings,
+  Verified,
+  Work,
+  Download as DownloadIcon,
+  Close as CloseIcon,
+} from "@mui/icons-material";
+import {
+  alpha,
+  Avatar,
+  Badge,
   Box,
   Button,
   Card,
   CardContent,
-  Container,
-  Grid,
-  Typography,
-  Divider,
   Chip,
-  Paper,
-  LinearProgress,
-  Avatar,
+  Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
   IconButton,
-  Badge,
   InputBase,
-  Menu,
-  MenuItem,
+  LinearProgress,
   ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
+  Tooltip as MuiTooltip,
+  Paper,
   Stack,
+  Typography,
+  useTheme,
+  CircularProgress,
 } from "@mui/material";
-import {
-  Person,
-  Work,
-  Home,
-  AttachMoney,
-  Score,
-  AssignmentTurnedIn,
-  Search,
-  Notifications,
-  Settings,
-  Logout,
-  Dashboard as DashboardIcon,
-  AccountCircle,
-  DateRange,
-  FilterList,
-  CheckCircle,
-  Cancel,
-  Pending,
-} from "@mui/icons-material";
 import axios from "axios";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
+import { toast, ToastContainer } from "react-toastify";
 import {
   PieChart,
   Pie,
   Cell,
-  Tooltip,
   Legend,
   ResponsiveContainer,
-} from "recharts";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   AreaChart,
   Area,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
 } from "recharts";
-import { useTheme, alpha } from "@mui/material/styles";
+import "react-toastify/dist/ReactToastify.css";
 
 function Dashboard() {
   const [applications, setApplications] = useState([]);
@@ -70,6 +77,9 @@ function Dashboard() {
   const [anchorEl, setAnchorEl] = useState(null);
   const [filterAnchorEl, setFilterAnchorEl] = useState(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [selectedDocs, setSelectedDocs] = useState([]);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [docsLoading, setDocsLoading] = useState(false);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const theme = useTheme();
 
@@ -103,6 +113,11 @@ function Dashboard() {
       label: "Rejected",
       icon: <Cancel color="error" fontSize="small" />,
     },
+    {
+      value: "DISBURSED",
+      label: "Disbursed",
+      icon: <AttachMoney color="primary" fontSize="small" />,
+    },
   ];
 
   // Prepare data for charts
@@ -112,7 +127,7 @@ function Dashboard() {
         acc[app.status] = (acc[app.status] || 0) + 1;
         return acc;
       },
-      { PENDING: 0, APPROVED: 0, REJECTED: 0 }
+      { PENDING: 0, APPROVED: 0, REJECTED: 0, DISBURSED: 0 }
     );
     return [
       {
@@ -130,9 +145,28 @@ function Dashboard() {
         value: statusCounts.REJECTED,
         color: theme.palette.error.main,
       },
+      {
+        name: "Disbursed",
+        value: statusCounts.DISBURSED,
+        color: theme.palette.primary.main,
+      },
     ].filter((item) => item.value > 0);
   };
 
+  // Monthly data (dynamic from applications)
+  const getMonthlyData = () => {
+    const monthly = {};
+    applications.forEach((app) => {
+      const date = new Date(app.createdAt || app.applicationDate);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthly[key]) monthly[key] = { applications: 0, approved: 0, month: key };
+      monthly[key].applications += 1;
+      if (app.status === "APPROVED" || app.status === "DISBURSED") monthly[key].approved += 1;
+    });
+    return Object.values(monthly).sort((a, b) => a.month.localeCompare(b.month));
+  };
+
+  // Loan purpose bar chart
   const getPurposeData = () => {
     const purposeSums = applications.reduce((acc, app) => {
       acc[app.purpose] = (acc[app.purpose] || 0) + Number(app.loanAmount);
@@ -144,23 +178,11 @@ function Dashboard() {
     }));
   };
 
-  const getMonthlyData = () => {
-    // Simulate monthly data for the chart
-    return [
-      { month: "Jan", applications: 12, approved: 8 },
-      { month: "Feb", applications: 18, approved: 12 },
-      { month: "Mar", applications: 15, approved: 10 },
-      { month: "Apr", applications: 22, approved: 16 },
-      { month: "May", applications: 19, approved: 14 },
-      { month: "Jun", applications: 25, approved: 18 },
-    ];
-  };
-
   // Filter applications based on search and status filter
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
-      app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.purpose.toLowerCase().includes(searchQuery.toLowerCase());
+      app.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      app.purpose?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "ALL" || app.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -173,6 +195,7 @@ function Dashboard() {
       return;
     }
     fetchApplications();
+    // eslint-disable-next-line
   }, []);
 
   const fetchApplications = async () => {
@@ -191,6 +214,37 @@ function Dashboard() {
       setError(errorMessage);
       toast.error(errorMessage);
       setLoading(false);
+    }
+  };
+
+  // ADMIN: Fetch all documents for a user (robust userId logic, plus debug log)
+  const fetchDocuments = async (app) => {
+    console.log("app object for View Documents:", app);
+    // Try all possible fields for userId
+    const userId =
+      app.userId ||
+      (app.user && (app.user.id || app.user.userId)) ||
+      app.userID ||
+      app.userid;
+    console.log("Extracted userId:", userId);
+    if (!userId) {
+      toast.error("User ID not found for this application.");
+      setSelectedDocs([]);
+      setPdfDialogOpen(true);
+      return;
+    }
+    setDocsLoading(true);
+    setPdfDialogOpen(true);
+    try {
+      const response = await axios.get(
+        `http://localhost:8732/api/documents/user/${userId}`
+      );
+      setSelectedDocs(response.data || []);
+    } catch (e) {
+      setSelectedDocs([]);
+      toast.error("Failed to load documents");
+    } finally {
+      setDocsLoading(false);
     }
   };
 
@@ -224,6 +278,14 @@ function Dashboard() {
       toast.error(error.response?.data?.message || "Disbursement failed");
     }
   };
+
+  // Format date without date-fns
+  const formattedDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 
   if (loading) {
     return (
@@ -303,14 +365,6 @@ function Dashboard() {
     );
   }
 
-  // Format date without date-fns
-  const formattedDate = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
   return (
     <Box
       sx={{
@@ -322,146 +376,9 @@ function Dashboard() {
         pb: 8,
       }}
     >
-      {/* App Bar */}
-      <Paper
-        elevation={0}
-        sx={{
-          position: "sticky",
-          top: 0,
-          zIndex: 1100,
-          borderRadius: 0,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          backdropFilter: "blur(20px)",
-          backgroundColor: alpha(theme.palette.background.paper, 0.8),
-          p: 2,
-          mb: 4,
-        }}
-      >
-        <Container maxWidth="xl">
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              <Avatar
-                sx={{
-                  mr: 2,
-                  width: 40,
-                  height: 40,
-                  bgcolor: theme.palette.primary.main,
-                  color: theme.palette.primary.contrastText,
-                }}
-              >
-                <DashboardIcon />
-              </Avatar>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Loan
-                <span style={{ color: theme.palette.primary.main }}>Hub</span>
-              </Typography>
-            </Box>
-
-            <Paper
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                width: 400,
-                borderRadius: 3,
-                px: 2,
-                py: 0.5,
-                backgroundColor: alpha(theme.palette.primary.main, 0.05),
-              }}
-            >
-              <Search color="action" />
-              <InputBase
-                placeholder="Search applications..."
-                sx={{ ml: 1, flex: 1 }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </Paper>
-
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              <IconButton sx={{ mr: 1 }}>
-                <Badge badgeContent={4} color="error">
-                  <Notifications />
-                </Badge>
-              </IconButton>
-              <IconButton sx={{ mr: 1 }}>
-                <Settings />
-              </IconButton>
-              <Button
-                variant="outlined"
-                startIcon={<AccountCircle />}
-                onClick={handleMenuOpen}
-                sx={{ borderRadius: 3 }}
-              >
-                {user.name || "User"}
-              </Button>
-            </Box>
-          </Box>
-        </Container>
-      </Paper>
-
-      {/* User Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-        PaperProps={{
-          elevation: 3,
-          sx: {
-            mt: 1.5,
-            minWidth: 200,
-            borderRadius: 3,
-            overflow: "visible",
-            "&:before": {
-              content: '""',
-              display: "block",
-              position: "absolute",
-              top: 0,
-              right: 14,
-              width: 10,
-              height: 10,
-              bgcolor: "background.paper",
-              transform: "translateY(-50%) rotate(45deg)",
-              zIndex: 0,
-            },
-          },
-        }}
-        transformOrigin={{ horizontal: "right", vertical: "top" }}
-        anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-      >
-        <MenuItem>
-          <ListItemIcon>
-            <AccountCircle fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Profile</ListItemText>
-        </MenuItem>
-        <MenuItem>
-          <ListItemIcon>
-            <Settings fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Settings</ListItemText>
-        </MenuItem>
-        <Divider />
-        <MenuItem
-          onClick={() => {
-            localStorage.removeItem("user");
-            window.location.href = "/login";
-          }}
-        >
-          <ListItemIcon>
-            <Logout fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Logout</ListItemText>
-        </MenuItem>
-      </Menu>
-
+      <ToastContainer />
+      {/* --- CHARTS SECTION --- */}
       <Container maxWidth="xl" sx={{ mt: 4 }}>
-        {/* Header */}
         <Box sx={{ mb: 4 }}>
           <motion.div
             initial={{ opacity: 0, y: -20 }}
@@ -487,350 +404,95 @@ function Dashboard() {
           </motion.div>
         </Box>
 
-        {/* Stats Cards */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <motion.div whileHover={{ y: -5 }}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  background: `linear-gradient(135deg, ${alpha(
-                    theme.palette.primary.main,
-                    0.1
-                  )} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-                  boxShadow: "none",
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                }}
-              >
-                <CardContent>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
+          {/* Status Pie Chart */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Application Status
+              </Typography>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={getStatusData()}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, percent }) =>
+                      `${name} ${(percent * 100).toFixed(0)}%`
+                    }
                   >
-                    <Typography color="text.secondary" gutterBottom>
-                      Total Applications
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        bgcolor: alpha(theme.palette.primary.main, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <AssignmentTurnedIn color="primary" />
-                    </Box>
-                  </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {applications.length}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    <Box component="span" sx={{ color: "success.main" }}>
-                      +12%
-                    </Box>{" "}
-                    from last month
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
+                    {getStatusData().map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </Paper>
           </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <motion.div whileHover={{ y: -5 }}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  background: `linear-gradient(135deg, ${alpha(
-                    theme.palette.success.main,
-                    0.1
-                  )} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`,
-                  boxShadow: "none",
-                  border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-                }}
-              >
-                <CardContent>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <Typography color="text.secondary" gutterBottom>
-                      Approved
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        bgcolor: alpha(theme.palette.success.main, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <CheckCircle color="success" />
-                    </Box>
-                  </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {applications.filter((a) => a.status === "APPROVED").length}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    <Box component="span" sx={{ color: "success.main" }}>
-                      +8%
-                    </Box>{" "}
-                    from last month
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <motion.div whileHover={{ y: -5 }}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  background: `linear-gradient(135deg, ${alpha(
-                    theme.palette.warning.main,
-                    0.1
-                  )} 0%, ${alpha(theme.palette.warning.main, 0.05)} 100%)`,
-                  boxShadow: "none",
-                  border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
-                }}
-              >
-                <CardContent>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <Typography color="text.secondary" gutterBottom>
-                      Pending
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        bgcolor: alpha(theme.palette.warning.main, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Pending color="warning" />
-                    </Box>
-                  </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {applications.filter((a) => a.status === "PENDING").length}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    <Box component="span" sx={{ color: "warning.main" }}>
-                      +5%
-                    </Box>{" "}
-                    from last month
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} sm={6} md={3}>
-            <motion.div whileHover={{ y: -5 }}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  background: `linear-gradient(135deg, ${alpha(
-                    theme.palette.error.main,
-                    0.1
-                  )} 0%, ${alpha(theme.palette.error.main, 0.05)} 100%)`,
-                  boxShadow: "none",
-                  border: `1px solid ${alpha(theme.palette.error.main, 0.2)}`,
-                }}
-              >
-                <CardContent>
-                  <Box
-                    sx={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <Typography color="text.secondary" gutterBottom>
-                      Rejected
-                    </Typography>
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: "50%",
-                        bgcolor: alpha(theme.palette.error.main, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Cancel color="error" />
-                    </Box>
-                  </Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {applications.filter((a) => a.status === "REJECTED").length}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    <Box component="span" sx={{ color: "error.main" }}>
-                      -2%
-                    </Box>{" "}
-                    from last month
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        </Grid>
-
-        {/* Charts Section */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Status Distribution */}
-          <Grid item xs={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Paper
-                sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: "100%",
-                  background: theme.palette.background.paper,
-                  boxShadow: theme.shadows[2],
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 3,
-                  }}
-                >
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Application Status
-                  </Typography>
-                  <Chip
-                    label="This Month"
-                    size="small"
-                    sx={{ borderRadius: 2 }}
+          {/* Monthly Trends Area Chart */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Monthly Trends
+              </Typography>
+              <ResponsiveContainer width="100%" height={250}>
+                <AreaChart data={getMonthlyData()} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="applications"
+                    stackId="1"
+                    stroke={theme.palette.primary.main}
+                    fill={theme.palette.primary.light}
                   />
-                </Box>
-                <Box sx={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={getStatusData()}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                        label={({ name, percent }) =>
-                          `${name} ${(percent * 100).toFixed(0)}%`
-                        }
-                      >
-                        {getStatusData().map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value) => [
-                          `${value} Applications`,
-                          "Count",
-                        ]}
-                      />
-                      <Legend
-                        layout="horizontal"
-                        verticalAlign="bottom"
-                        align="center"
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Paper>
-            </motion.div>
+                  <Area
+                    type="monotone"
+                    dataKey="approved"
+                    stackId="2"
+                    stroke={theme.palette.success.main}
+                    fill={theme.palette.success.light}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </Paper>
           </Grid>
-
-          {/* Monthly Trends */}
-          <Grid item xs={12} md={6}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Paper
-                sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  height: "100%",
-                  background: theme.palette.background.paper,
-                  boxShadow: theme.shadows[2],
-                }}
-              >
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    mb: 3,
-                  }}
-                >
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Monthly Trends
-                  </Typography>
-                  <Button
-                    size="small"
-                    endIcon={<DateRange fontSize="small" />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    2025
-                  </Button>
-                </Box>
-                <Box sx={{ height: 300 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={getMonthlyData()}
-                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                    >
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        stroke={theme.palette.divider}
-                      />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip />
-                      <Area
-                        type="monotone"
-                        dataKey="applications"
-                        stackId="1"
-                        stroke={theme.palette.primary.main}
-                        fill={alpha(theme.palette.primary.main, 0.2)}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="approved"
-                        stackId="2"
-                        stroke={theme.palette.success.main}
-                        fill={alpha(theme.palette.success.main, 0.2)}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </Box>
-              </Paper>
-            </motion.div>
+          {/* Loan Purpose Bar Chart */}
+          <Grid item xs={12} md={4}>
+            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                Loan Amount by Purpose
+              </Typography>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={getPurposeData()}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                  <XAxis dataKey="purpose" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="amount" fill={theme.palette.info.main} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Paper>
           </Grid>
         </Grid>
 
-        {/* Applications Section */}
+        {/* --- APPLICATIONS SECTION --- */}
         <Paper
           sx={{
             p: 3,
             borderRadius: 3,
             background: theme.palette.background.paper,
             boxShadow: theme.shadows[2],
+            mb: 4,
           }}
         >
           <Box
@@ -844,7 +506,6 @@ function Dashboard() {
             <Typography variant="h6" sx={{ fontWeight: 600 }}>
               Loan Applications
             </Typography>
-
             <Box sx={{ display: "flex", gap: 2 }}>
               <Button
                 variant="outlined"
@@ -938,6 +599,8 @@ function Dashboard() {
                               ? theme.palette.success.main
                               : app.status === "REJECTED"
                               ? theme.palette.error.main
+                              : app.status === "DISBURSED"
+                              ? theme.palette.primary.main
                               : theme.palette.warning.main
                           }`,
                           boxShadow: theme.shadows[1],
@@ -976,12 +639,16 @@ function Dashboard() {
                                     ? alpha(theme.palette.success.main, 0.1)
                                     : app.status === "REJECTED"
                                     ? alpha(theme.palette.error.main, 0.1)
+                                    : app.status === "DISBURSED"
+                                    ? alpha(theme.palette.primary.main, 0.1)
                                     : alpha(theme.palette.warning.main, 0.1),
                                 color:
                                   app.status === "APPROVED"
                                     ? theme.palette.success.main
                                     : app.status === "REJECTED"
                                     ? theme.palette.error.main
+                                    : app.status === "DISBURSED"
+                                    ? theme.palette.primary.main
                                     : theme.palette.warning.main,
                               }}
                             />
@@ -989,49 +656,21 @@ function Dashboard() {
 
                           <Stack spacing={1.5} sx={{ mb: 2 }}>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Work
-                                sx={{
-                                  mr: 1,
-                                  color: theme.palette.text.secondary,
-                                  fontSize: 20,
-                                }}
-                              />
+                              <Work sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
+                              <Typography variant="body2">{app.profession}</Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <Home sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
+                              <Typography variant="body2">{app.purpose}</Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                              <AttachMoney sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
                               <Typography variant="body2">
-                                {app.profession}
+                                ₹{Number(app.loanAmount).toLocaleString()}
                               </Typography>
                             </Box>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Home
-                                sx={{
-                                  mr: 1,
-                                  color: theme.palette.text.secondary,
-                                  fontSize: 20,
-                                }}
-                              />
-                              <Typography variant="body2">
-                                {app.purpose}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <AttachMoney
-                                sx={{
-                                  mr: 1,
-                                  color: theme.palette.text.secondary,
-                                  fontSize: 20,
-                                }}
-                              />
-                              <Typography variant="body2">
-                                ${Number(app.loanAmount).toLocaleString()}
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Score
-                                sx={{
-                                  mr: 1,
-                                  color: theme.palette.text.secondary,
-                                  fontSize: 20,
-                                }}
-                              />
+                              <Score sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
                               <Typography variant="body2">
                                 Credit Score: {app.creditScore}
                               </Typography>
@@ -1042,21 +681,37 @@ function Dashboard() {
                             <Box
                               sx={{
                                 display: "flex",
+                                flexDirection: "column",
                                 gap: 1,
                                 mt: 2,
                               }}
                             >
+                              <MuiTooltip title="View all user-submitted PDFs" arrow>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<PictureAsPdf />}
+                                  onClick={async () => {
+                                    await fetchDocuments(app);
+                                  }}
+                                  sx={{
+                                    borderRadius: 2,
+                                    textTransform: "none",
+                                    mb: 1,
+                                    background: "linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%)",
+                                  }}
+                                  color="secondary"
+                                >
+                                  View Documents
+                                </Button>
+                              </MuiTooltip>
                               {app.status === "PENDING" && (
-                                <>
+                                <Box sx={{ display: "flex", gap: 1 }}>
                                   <Button
                                     variant="contained"
                                     color="success"
                                     size="small"
                                     onClick={() =>
-                                      handleStatusUpdate(
-                                        app.applicationId,
-                                        "APPROVED"
-                                      )
+                                      handleStatusUpdate(app.applicationId, "APPROVED")
                                     }
                                     sx={{
                                       borderRadius: 2,
@@ -1071,10 +726,7 @@ function Dashboard() {
                                     color="error"
                                     size="small"
                                     onClick={() =>
-                                      handleStatusUpdate(
-                                        app.applicationId,
-                                        "REJECTED"
-                                      )
+                                      handleStatusUpdate(app.applicationId, "REJECTED")
                                     }
                                     sx={{
                                       borderRadius: 2,
@@ -1084,16 +736,14 @@ function Dashboard() {
                                   >
                                     Reject
                                   </Button>
-                                </>
+                                </Box>
                               )}
                               {app.status === "APPROVED" && (
                                 <Button
                                   variant="contained"
                                   color="primary"
                                   size="small"
-                                  onClick={() =>
-                                    handleDisburse(app.applicationId)
-                                  }
+                                  onClick={() => handleDisburse(app.applicationId)}
                                   sx={{
                                     borderRadius: 2,
                                     width: "100%",
@@ -1114,6 +764,113 @@ function Dashboard() {
             </Grid>
           )}
         </Paper>
+
+        {/* PDF Dialog for Admin */}
+        <Dialog
+          open={pdfDialogOpen}
+          onClose={() => setPdfDialogOpen(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              p: 2,
+              background: "linear-gradient(120deg, #f8fafc 0%, #e0e7ef 100%)",
+            },
+          }}
+        >
+          <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <PictureAsPdf color="error" />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                User Documents
+              </Typography>
+            </Stack>
+            <IconButton onClick={() => setPdfDialogOpen(false)}>
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            {docsLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : selectedDocs.length === 0 ? (
+              <Typography>No documents found.</Typography>
+            ) : (
+              selectedDocs.map((doc) => (
+                <Box
+                  key={doc.documentId}
+                  sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}
+                >
+                  <PictureAsPdf color="error" sx={{ fontSize: 32 }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ fontWeight: 600 }}>
+                      {doc.fileName || doc.documentType || "PDF Document"}
+                      <Chip
+                        label={doc.documentType}
+                        size="small"
+                        color="info"
+                        sx={{ ml: 1, fontWeight: 500 }}
+                      />
+                      {doc.verified && (
+                        <MuiTooltip title="Verified by admin" arrow>
+                          <Verified
+                            color="success"
+                            sx={{ ml: 1, fontSize: 20 }}
+                          />
+                        </MuiTooltip>
+                      )}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Uploaded:{" "}
+                      {doc.uploadDate
+                        ? new Date(doc.uploadDate).toLocaleString()
+                        : "N/A"}
+                    </Typography>
+                  </Box>
+                  <MuiTooltip title="Open PDF in new tab" arrow>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      sx={{ mr: 1, borderRadius: 2 }}
+                      onClick={() =>
+                        window.open(
+                          `http://localhost:8732/api/documents/download/${doc.documentId}`,
+                          "_blank"
+                        )
+                      }
+                    >
+                      View
+                    </Button>
+                  </MuiTooltip>
+                  <MuiTooltip title="Download PDF" arrow>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      size="small"
+                      sx={{ borderRadius: 2 }}
+                      href={`http://localhost:8732/api/documents/download/${doc.documentId}`}
+                      target="_blank"
+                      startIcon={<DownloadIcon />}
+                    >
+                      Download
+                    </Button>
+                  </MuiTooltip>
+                </Box>
+              ))
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => setPdfDialogOpen(false)}
+              sx={{ borderRadius: 2 }}
+            >
+              Close
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Container>
     </Box>
   );
