@@ -61,6 +61,7 @@ function LoanApplication() {
     purpose: "",
     loanAmount: "",
     panCard: "",
+    tenureInMonths: "", // <-- tenure field added
   });
   const [files, setFiles] = useState({
     pfAccountPdf: null,
@@ -101,6 +102,12 @@ function LoanApplication() {
       if (!formData.panCard.trim()) return "PAN card is required";
       if (!panRegex.test(formData.panCard))
         return "Enter a valid PAN card (e.g. ABCDE1234F)";
+      if (
+        !formData.tenureInMonths ||
+        isNaN(formData.tenureInMonths) ||
+        Number(formData.tenureInMonths) < 1
+      )
+        return "Please enter a valid loan tenure (in months)";
     }
     if (step === 2) {
       if (!files.pfAccountPdf) return "PF Account Statement PDF is required";
@@ -345,6 +352,38 @@ function LoanApplication() {
                   />
                 </Box>
               )}
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Tooltip
+                title="Select your desired loan tenure in months (e.g. 12, 24, 36)"
+                arrow
+              >
+                <TextField
+                  fullWidth
+                  label="Loan Tenure (Months)"
+                  name="tenureInMonths"
+                  type="number"
+                  value={formData.tenureInMonths}
+                  onChange={handleChange}
+                  onFocus={() => handleFocus("tenureInMonths")}
+                  onBlur={handleBlur}
+                  variant="outlined"
+                  required
+                  InputProps={{
+                    inputProps: { min: 1, max: 120 },
+                  }}
+                  error={
+                    !!formData.tenureInMonths &&
+                    Number(formData.tenureInMonths) < 1
+                  }
+                  helperText={
+                    !!formData.tenureInMonths &&
+                    Number(formData.tenureInMonths) < 1
+                      ? "Tenure must be at least 1 month"
+                      : " "
+                  }
+                />
+              </Tooltip>
             </Grid>
             <Grid item xs={12}>
               <Tooltip
@@ -619,6 +658,9 @@ function LoanApplication() {
                 </Typography>
                 <Typography>
                   <b>Loan Amount:</b> ₹{formData.loanAmount}
+                </Typography>
+                <Typography>
+                  <b>Loan Tenure:</b> {formData.tenureInMonths} months
                 </Typography>
                 <Typography>
                   <b>PF Account PDF:</b>{" "}

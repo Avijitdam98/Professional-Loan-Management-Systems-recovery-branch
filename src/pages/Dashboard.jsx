@@ -1,41 +1,33 @@
 import {
-  AccountCircle,
   AttachMoney,
   Cancel,
   CheckCircle,
+  Close as CloseIcon,
   Dashboard as DashboardIcon,
+  Download as DownloadIcon,
   FilterList,
   Home,
-  Logout,
-  Notifications,
   Pending,
   PictureAsPdf,
   Score,
-  Search,
-  Settings,
-  Verified,
   Work,
-  Download as DownloadIcon,
-  Close as CloseIcon,
 } from "@mui/icons-material";
 import {
   alpha,
   Avatar,
-  Badge,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   Grid,
   IconButton,
-  InputBase,
   LinearProgress,
   ListItemIcon,
   ListItemText,
@@ -46,28 +38,27 @@ import {
   Stack,
   Typography,
   useTheme,
-  CircularProgress,
 } from "@mui/material";
 import axios from "axios";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import {
-  PieChart,
-  Pie,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
   Cell,
   Legend,
+  Pie,
+  PieChart,
   ResponsiveContainer,
-  AreaChart,
-  Area,
-  CartesianGrid,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
 } from "recharts";
-import "react-toastify/dist/ReactToastify.css";
 
 function Dashboard() {
   const [applications, setApplications] = useState([]);
@@ -80,16 +71,14 @@ function Dashboard() {
   const [selectedDocs, setSelectedDocs] = useState([]);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [docsLoading, setDocsLoading] = useState(false);
+
+  // EMI Repayment state
+  const [selectedLoanEMIs, setSelectedLoanEMIs] = useState([]);
+  const [emiDialogOpen, setEmiDialogOpen] = useState(false);
+  const [emiLoading, setEmiLoading] = useState(false);
+
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const theme = useTheme();
-
-  // Open/close user menu
-  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
-
-  // Open/close filter menu
-  const handleFilterOpen = (event) => setFilterAnchorEl(event.currentTarget);
-  const handleFilterClose = () => setFilterAnchorEl(null);
 
   // Status filter options
   const statusFilters = [
@@ -158,12 +147,19 @@ function Dashboard() {
     const monthly = {};
     applications.forEach((app) => {
       const date = new Date(app.createdAt || app.applicationDate);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      if (!monthly[key]) monthly[key] = { applications: 0, approved: 0, month: key };
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}`;
+      if (!monthly[key])
+        monthly[key] = { applications: 0, approved: 0, month: key };
       monthly[key].applications += 1;
-      if (app.status === "APPROVED" || app.status === "DISBURSED") monthly[key].approved += 1;
+      if (app.status === "APPROVED" || app.status === "DISBURSED")
+        monthly[key].approved += 1;
     });
-    return Object.values(monthly).sort((a, b) => a.month.localeCompare(b.month));
+    return Object.values(monthly).sort((a, b) =>
+      a.month.localeCompare(b.month)
+    );
   };
 
   // Loan purpose bar chart
@@ -217,18 +213,11 @@ function Dashboard() {
     }
   };
 
-  // ADMIN: Fetch all documents for a user (robust userId logic, plus debug log)
+  // Fetch documents for a specific application
   const fetchDocuments = async (app) => {
-    console.log("app object for View Documents:", app);
-    // Try all possible fields for userId
-    const userId =
-      app.userId ||
-      (app.user && (app.user.id || app.user.userId)) ||
-      app.userID ||
-      app.userid;
-    console.log("Extracted userId:", userId);
-    if (!userId) {
-      toast.error("User ID not found for this application.");
+    const applicationId = app.applicationId;
+    if (!applicationId) {
+      toast.error("Application ID not found.");
       setSelectedDocs([]);
       setPdfDialogOpen(true);
       return;
@@ -237,7 +226,7 @@ function Dashboard() {
     setPdfDialogOpen(true);
     try {
       const response = await axios.get(
-        `http://localhost:8732/api/documents/user/${userId}`
+        `http://localhost:8732/api/loans/documents/application/${applicationId}`
       );
       setSelectedDocs(response.data || []);
     } catch (e) {
@@ -248,12 +237,13 @@ function Dashboard() {
     }
   };
 
+  // Status update handler (admin)
   const handleStatusUpdate = async (applicationId, status) => {
     try {
       await axios.put(
         `http://localhost:8732/api/loans/update-status/${applicationId}`,
         null,
-        { params: { status } }
+        { params: { status: status.toUpperCase() } }
       );
       toast.success(`Application ${status.toLowerCase()}!`);
       fetchApplications();
@@ -262,6 +252,7 @@ function Dashboard() {
     }
   };
 
+  // Disburse loan (admin)
   const handleDisburse = async (applicationId) => {
     try {
       const application = applications.find(
@@ -276,6 +267,35 @@ function Dashboard() {
       fetchApplications();
     } catch (error) {
       toast.error(error.response?.data?.message || "Disbursement failed");
+    }
+  };
+
+  // --- EMI Repayment Logic ---
+  const fetchEMIs = async (applicationId) => {
+    setEmiLoading(true);
+    setEmiDialogOpen(true);
+    try {
+      const response = await axios.get(
+        `http://localhost:8732/api/repayments/loan/${applicationId}`
+      );
+      setSelectedLoanEMIs(response.data || []);
+    } catch (e) {
+      setSelectedLoanEMIs([]);
+      toast.error("Failed to load EMI schedule");
+    } finally {
+      setEmiLoading(false);
+    }
+  };
+
+  const handlePayEmi = async (repaymentId, applicationId) => {
+    try {
+      await axios.post(
+        `http://localhost:8732/api/repayments/pay/${repaymentId}`
+      );
+      toast.success("EMI paid successfully!");
+      fetchEMIs(applicationId); // Refresh EMI list
+    } catch (e) {
+      toast.error(e.response?.data?.error || "Failed to pay EMI");
     }
   };
 
@@ -407,7 +427,14 @@ function Dashboard() {
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* Status Pie Chart */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+            <Paper
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                height: "100%",
+                boxShadow: theme.shadows[2],
+              }}
+            >
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Application Status
               </Typography>
@@ -437,13 +464,26 @@ function Dashboard() {
           </Grid>
           {/* Monthly Trends Area Chart */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+            <Paper
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                height: "100%",
+                boxShadow: theme.shadows[2],
+              }}
+            >
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Monthly Trends
               </Typography>
               <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={getMonthlyData()} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                <AreaChart
+                  data={getMonthlyData()}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={theme.palette.divider}
+                  />
                   <XAxis dataKey="month" />
                   <YAxis />
                   <Tooltip />
@@ -467,13 +507,23 @@ function Dashboard() {
           </Grid>
           {/* Loan Purpose Bar Chart */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ p: 3, borderRadius: 3, height: "100%", boxShadow: theme.shadows[2] }}>
+            <Paper
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                height: "100%",
+                boxShadow: theme.shadows[2],
+              }}
+            >
               <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Loan Amount by Purpose
               </Typography>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={getPurposeData()}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.divider} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={theme.palette.divider}
+                  />
                   <XAxis dataKey="purpose" />
                   <YAxis />
                   <Tooltip />
@@ -510,7 +560,7 @@ function Dashboard() {
               <Button
                 variant="outlined"
                 startIcon={<FilterList />}
-                onClick={handleFilterOpen}
+                onClick={(e) => setFilterAnchorEl(e.currentTarget)}
                 sx={{ borderRadius: 3 }}
               >
                 Filter
@@ -532,7 +582,7 @@ function Dashboard() {
           <Menu
             anchorEl={filterAnchorEl}
             open={Boolean(filterAnchorEl)}
-            onClose={handleFilterClose}
+            onClose={() => setFilterAnchorEl(null)}
             PaperProps={{
               elevation: 3,
               sx: {
@@ -548,7 +598,7 @@ function Dashboard() {
                 selected={statusFilter === filter.value}
                 onClick={() => {
                   setStatusFilter(filter.value);
-                  handleFilterClose();
+                  setFilterAnchorEl(null);
                 }}
               >
                 <ListItemIcon>{filter.icon}</ListItemIcon>
@@ -656,27 +706,56 @@ function Dashboard() {
 
                           <Stack spacing={1.5} sx={{ mb: 2 }}>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Work sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
-                              <Typography variant="body2">{app.profession}</Typography>
+                              <Work
+                                sx={{
+                                  mr: 1,
+                                  color: theme.palette.text.secondary,
+                                  fontSize: 20,
+                                }}
+                              />
+                              <Typography variant="body2">
+                                {app.profession}
+                              </Typography>
                             </Box>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Home sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
-                              <Typography variant="body2">{app.purpose}</Typography>
+                              <Home
+                                sx={{
+                                  mr: 1,
+                                  color: theme.palette.text.secondary,
+                                  fontSize: 20,
+                                }}
+                              />
+                              <Typography variant="body2">
+                                {app.purpose}
+                              </Typography>
                             </Box>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <AttachMoney sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
+                              <AttachMoney
+                                sx={{
+                                  mr: 1,
+                                  color: theme.palette.text.secondary,
+                                  fontSize: 20,
+                                }}
+                              />
                               <Typography variant="body2">
                                 ₹{Number(app.loanAmount).toLocaleString()}
                               </Typography>
                             </Box>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
-                              <Score sx={{ mr: 1, color: theme.palette.text.secondary, fontSize: 20 }} />
+                              <Score
+                                sx={{
+                                  mr: 1,
+                                  color: theme.palette.text.secondary,
+                                  fontSize: 20,
+                                }}
+                              />
                               <Typography variant="body2">
                                 Credit Score: {app.creditScore}
                               </Typography>
                             </Box>
                           </Stack>
 
+                          {/* Admin actions */}
                           {user.role === "ADMIN" && (
                             <Box
                               sx={{
@@ -686,7 +765,10 @@ function Dashboard() {
                                 mt: 2,
                               }}
                             >
-                              <MuiTooltip title="View all user-submitted PDFs" arrow>
+                              <MuiTooltip
+                                title="View all user-submitted PDFs"
+                                arrow
+                              >
                                 <Button
                                   variant="outlined"
                                   startIcon={<PictureAsPdf />}
@@ -697,7 +779,8 @@ function Dashboard() {
                                     borderRadius: 2,
                                     textTransform: "none",
                                     mb: 1,
-                                    background: "linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%)",
+                                    background:
+                                      "linear-gradient(90deg, #f8fafc 0%, #e0e7ef 100%)",
                                   }}
                                   color="secondary"
                                 >
@@ -711,7 +794,10 @@ function Dashboard() {
                                     color="success"
                                     size="small"
                                     onClick={() =>
-                                      handleStatusUpdate(app.applicationId, "APPROVED")
+                                      handleStatusUpdate(
+                                        app.applicationId,
+                                        "APPROVED"
+                                      )
                                     }
                                     sx={{
                                       borderRadius: 2,
@@ -726,7 +812,10 @@ function Dashboard() {
                                     color="error"
                                     size="small"
                                     onClick={() =>
-                                      handleStatusUpdate(app.applicationId, "REJECTED")
+                                      handleStatusUpdate(
+                                        app.applicationId,
+                                        "REJECTED"
+                                      )
                                     }
                                     sx={{
                                       borderRadius: 2,
@@ -743,7 +832,9 @@ function Dashboard() {
                                   variant="contained"
                                   color="primary"
                                   size="small"
-                                  onClick={() => handleDisburse(app.applicationId)}
+                                  onClick={() =>
+                                    handleDisburse(app.applicationId)
+                                  }
                                   sx={{
                                     borderRadius: 2,
                                     width: "100%",
@@ -755,6 +846,20 @@ function Dashboard() {
                               )}
                             </Box>
                           )}
+
+                          {/* USER EMI REPAYMENT BUTTON */}
+                          {user.role !== "ADMIN" &&
+                            app.status === "DISBURSED" && (
+                              <Button
+                                variant="outlined"
+                                color="primary"
+                                size="small"
+                                sx={{ borderRadius: 2, mt: 1 }}
+                                onClick={() => fetchEMIs(app.applicationId)}
+                              >
+                                View/Pay EMIs
+                              </Button>
+                            )}
                         </CardContent>
                       </Card>
                     </motion.div>
@@ -765,7 +870,7 @@ function Dashboard() {
           )}
         </Paper>
 
-        {/* PDF Dialog for Admin */}
+        {/* PDF Dialog for Application */}
         <Dialog
           open={pdfDialogOpen}
           onClose={() => setPdfDialogOpen(false)}
@@ -779,11 +884,17 @@ function Dashboard() {
             },
           }}
         >
-          <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <DialogTitle
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
             <Stack direction="row" alignItems="center" spacing={1}>
               <PictureAsPdf color="error" />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                User Documents
+                Application Documents
               </Typography>
             </Stack>
             <IconButton onClick={() => setPdfDialogOpen(false)}>
@@ -798,9 +909,9 @@ function Dashboard() {
             ) : selectedDocs.length === 0 ? (
               <Typography>No documents found.</Typography>
             ) : (
-              selectedDocs.map((doc) => (
+              selectedDocs.map((doc, idx) => (
                 <Box
-                  key={doc.documentId}
+                  key={doc.downloadUrl || idx}
                   sx={{ mb: 2, display: "flex", alignItems: "center", gap: 2 }}
                 >
                   <PictureAsPdf color="error" sx={{ fontSize: 32 }} />
@@ -813,20 +924,6 @@ function Dashboard() {
                         color="info"
                         sx={{ ml: 1, fontWeight: 500 }}
                       />
-                      {doc.verified && (
-                        <MuiTooltip title="Verified by admin" arrow>
-                          <Verified
-                            color="success"
-                            sx={{ ml: 1, fontSize: 20 }}
-                          />
-                        </MuiTooltip>
-                      )}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Uploaded:{" "}
-                      {doc.uploadDate
-                        ? new Date(doc.uploadDate).toLocaleString()
-                        : "N/A"}
                     </Typography>
                   </Box>
                   <MuiTooltip title="Open PDF in new tab" arrow>
@@ -837,7 +934,7 @@ function Dashboard() {
                       sx={{ mr: 1, borderRadius: 2 }}
                       onClick={() =>
                         window.open(
-                          `http://localhost:8732/api/documents/download/${doc.documentId}`,
+                          `http://localhost:8732${doc.downloadUrl}`,
                           "_blank"
                         )
                       }
@@ -851,7 +948,7 @@ function Dashboard() {
                       color="secondary"
                       size="small"
                       sx={{ borderRadius: 2 }}
-                      href={`http://localhost:8732/api/documents/download/${doc.documentId}`}
+                      href={`http://localhost:8732${doc.downloadUrl}`}
                       target="_blank"
                       startIcon={<DownloadIcon />}
                     >
@@ -869,6 +966,71 @@ function Dashboard() {
             >
               Close
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* --- EMI Dialog for Users --- */}
+        <Dialog
+          open={emiDialogOpen}
+          onClose={() => setEmiDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>EMI Schedule</DialogTitle>
+          <DialogContent dividers>
+            {emiLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : selectedLoanEMIs.length === 0 ? (
+              <Typography>No EMIs found.</Typography>
+            ) : (
+              selectedLoanEMIs.map((emi) => (
+                <Box
+                  key={emi.id}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    mb: 2,
+                    p: 1,
+                    borderRadius: 2,
+                    background: emi.status === "PAID" ? "#e0ffe0" : "#fffbe0",
+                  }}
+                >
+                  <Typography>
+                    EMI #{emi.emiNumber} - Due: {emi.dueDate} - Amount: ₹
+                    {emi.emiAmount}
+                  </Typography>
+                  <Chip
+                    label={emi.status}
+                    color={
+                      emi.status === "PAID"
+                        ? "success"
+                        : emi.status === "OVERDUE"
+                        ? "error"
+                        : "warning"
+                    }
+                    sx={{ mr: 2 }}
+                  />
+                  {emi.status === "PENDING" && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      onClick={
+                        () => handlePayEmi(emi.id, emi.applicationId) // <-- CHANGE IS HERE
+                      }
+                    >
+                      Pay EMI
+                    </Button>
+                  )}
+                </Box>
+              ))
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEmiDialogOpen(false)}>Close</Button>
           </DialogActions>
         </Dialog>
       </Container>
