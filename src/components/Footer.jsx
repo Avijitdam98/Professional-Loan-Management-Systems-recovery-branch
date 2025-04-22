@@ -1,5 +1,5 @@
-import { Box, Typography, Container, Link } from "@mui/material";
-import { Facebook, Twitter, LinkedIn } from "@mui/icons-material";
+import { Facebook, LinkedIn, Twitter } from "@mui/icons-material";
+import { Box, Container, Link, Typography } from "@mui/material";
 
 function Footer() {
   return (
@@ -26,13 +26,25 @@ function Footer() {
               © 2025 Sundaram Finance. All rights reserved.
             </Typography>
             <Box sx={{ mt: 2 }}>
-              <Link href="https://www.facebook.com" color="inherit" sx={{ mx: 1 }}>
+              <Link
+                href="https://www.facebook.com"
+                color="inherit"
+                sx={{ mx: 1 }}
+              >
                 <Facebook />
               </Link>
-              <Link href="https://www.twitter.com" color="inherit" sx={{ mx: 1 }}>
+              <Link
+                href="https://www.twitter.com"
+                color="inherit"
+                sx={{ mx: 1 }}
+              >
                 <Twitter />
               </Link>
-              <Link href="https://www.linkedin.com" color="inherit" sx={{ mx: 1 }}>
+              <Link
+                href="https://www.linkedin.com"
+                color="inherit"
+                sx={{ mx: 1 }}
+              >
                 <LinkedIn />
               </Link>
             </Box>
@@ -44,4 +56,3 @@ function Footer() {
 }
 
 export default Footer;
-

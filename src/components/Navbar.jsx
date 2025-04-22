@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Box,
@@ -15,95 +15,95 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-} from '@mui/material';
-import { styled } from '@mui/material/styles';
-import MenuIcon from '@mui/icons-material/Menu';
-import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
-import AccountBalanceRoundedIcon from '@mui/icons-material/AccountBalanceRounded';
-import CreditScoreRoundedIcon from '@mui/icons-material/CreditScoreRounded';
-import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
-import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
-import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
-import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
-import { motion } from 'framer-motion';
-import { toast } from 'react-hot-toast';
+} from "@mui/material";
+import { styled } from "@mui/material/styles";
+import MenuIcon from "@mui/icons-material/Menu";
+import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import CreditScoreRoundedIcon from "@mui/icons-material/CreditScoreRounded";
+import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
+import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
+import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import { motion } from "framer-motion";
+import { toast } from "react-hot-toast";
 
 const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  background: 'rgba(255, 255, 255, 0.8)',
-  backdropFilter: 'blur(10px)',
-  boxShadow: '0 4px 30px rgba(0, 0, 0, 0.1)',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
+  background: "rgba(255, 255, 255, 0.8)",
+  backdropFilter: "blur(10px)",
+  boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+  borderBottom: "1px solid rgba(255, 255, 255, 0.3)",
 }));
 
 const NavButton = styled(Button)(({ theme, active }) => ({
-  color: active ? theme.palette.primary.main : '#555',
+  color: active ? theme.palette.primary.main : "#555",
   fontWeight: 600,
-  fontSize: '0.95rem',
-  padding: '8px 16px',
-  borderRadius: '12px',
-  textTransform: 'none',
-  transition: 'all 0.3s ease',
-  position: 'relative',
-  overflow: 'hidden',
-  '&:hover': {
-    background: 'rgba(0, 45, 98, 0.05)',
-    transform: 'translateY(-2px)',
+  fontSize: "0.95rem",
+  padding: "8px 16px",
+  borderRadius: "12px",
+  textTransform: "none",
+  transition: "all 0.3s ease",
+  position: "relative",
+  overflow: "hidden",
+  "&:hover": {
+    background: "rgba(0, 45, 98, 0.05)",
+    transform: "translateY(-2px)",
   },
-  '&::after': {
+  "&::after": {
     content: '""',
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
-    left: '50%',
-    width: active ? '100%' : '0%',
-    height: '3px',
-    background: 'linear-gradient(90deg, #002D62, #F9B233)',
-    transition: 'all 0.3s ease',
-    transform: 'translateX(-50%)',
+    left: "50%",
+    width: active ? "100%" : "0%",
+    height: "3px",
+    background: "linear-gradient(90deg, #002D62, #F9B233)",
+    transition: "all 0.3s ease",
+    transform: "translateX(-50%)",
   },
 }));
 
 const SignInButton = styled(Button)(({ theme }) => ({
-  background: 'linear-gradient(45deg, #002D62 30%, #F9B233 90%)',
+  background: "linear-gradient(45deg, #002D62 30%, #F9B233 90%)",
   border: 0,
-  borderRadius: '12px',
-  color: 'white',
-  padding: '8px 24px',
+  borderRadius: "12px",
+  color: "white",
+  padding: "8px 24px",
   fontWeight: 600,
-  textTransform: 'none',
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 12px rgba(0, 45, 98, 0.2)',
+  textTransform: "none",
+  transition: "all 0.3s ease",
+  "&:hover": {
+    transform: "translateY(-2px)",
+    boxShadow: "0 4px 12px rgba(0, 45, 98, 0.2)",
   },
 }));
 
 const LogoutButton = styled(Button)(({ theme }) => ({
-  background: 'linear-gradient(45deg, #dc3545 30%, #ff4d4d 90%)',
+  background: "linear-gradient(45deg, #dc3545 30%, #ff4d4d 90%)",
   border: 0,
-  borderRadius: '12px',
-  color: 'white',
-  padding: '8px 24px',
+  borderRadius: "12px",
+  color: "white",
+  padding: "8px 24px",
   fontWeight: 600,
-  textTransform: 'none',
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    transform: 'translateY(-2px)',
-    boxShadow: '0 4px 12px rgba(220, 53, 69, 0.2)',
+  textTransform: "none",
+  transition: "all 0.3s ease",
+  "&:hover": {
+    transform: "translateY(-2px)",
+    boxShadow: "0 4px 12px rgba(220, 53, 69, 0.2)",
   },
 }));
 
 const Logo = styled(Typography)(({ theme }) => ({
-  background: 'linear-gradient(45deg, #002D62, #F9B233)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
+  background: "linear-gradient(45deg, #002D62, #F9B233)",
+  WebkitBackgroundClip: "text",
+  WebkitTextFillColor: "transparent",
   fontWeight: 800,
-  fontSize: '1.5rem',
-  cursor: 'pointer',
-  '&:hover': {
-    transform: 'scale(1.05)',
+  fontSize: "1.5rem",
+  cursor: "pointer",
+  "&:hover": {
+    transform: "scale(1.05)",
   },
-  transition: 'transform 0.3s ease',
+  transition: "transform 0.3s ease",
 }));
 
 const Navbar = () => {
@@ -112,59 +112,75 @@ const Navbar = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState(null);
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
     const checkAuth = () => {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
       setIsAuthenticated(!!user.id);
       setUserRole(user.role || null);
     };
 
     checkAuth();
-    window.addEventListener('storage', checkAuth);
-    return () => window.removeEventListener('storage', checkAuth);
+    window.addEventListener("storage", checkAuth);
+    return () => window.removeEventListener("storage", checkAuth);
   }, []);
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
   };
 
   const getNavItems = () => {
-    const items = [
-      { title: 'Home', path: '/', icon: <HomeRoundedIcon /> },
-    ];
+    const items = [{ title: "Home", path: "/", icon: <HomeRoundedIcon /> }];
 
     if (isAuthenticated) {
       items.push(
-        { title: 'Dashboard', path: '/dashboard', icon: <DashboardRoundedIcon /> },
-        { title: 'Credit Score', path: '/credit-score', icon: <CreditScoreRoundedIcon /> }
+        {
+          title: "Dashboard",
+          path: "/dashboard",
+          icon: <DashboardRoundedIcon />,
+        },
+        {
+          title: "Credit Score",
+          path: "/credit-score",
+          icon: <CreditScoreRoundedIcon />,
+        }
       );
-      if (userRole === 'USER') {
-        items.push({ title: 'Apply Loan', path: '/apply-loan', icon: <AccountBalanceRoundedIcon /> });
+      if (userRole === "USER") {
+        items.push({
+          title: "Apply Loan",
+          path: "/apply-loan",
+          icon: <AccountBalanceRoundedIcon />,
+        });
       }
     }
 
     return items;
   };
 
+  // Redirect to HOME after logout
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    window.dispatchEvent(new Event('storage'));
-    toast.success('Logged out successfully');
+    localStorage.removeItem("user");
+    window.dispatchEvent(new Event("storage"));
+    toast.success("Logged out successfully");
+    navigate("/", { replace: true });
   };
 
   const drawer = (
     <Box sx={{ width: 280, pt: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, mb: 2 }}>
+      <Box
+        sx={{ display: "flex", justifyContent: "space-between", px: 2, mb: 2 }}
+      >
         <Logo>SundaramProLoan</Logo>
         <IconButton onClick={handleDrawerToggle}>
           <CloseRoundedIcon />
@@ -181,19 +197,23 @@ const Navbar = () => {
               mb: 1,
               borderRadius: 2,
               mx: 1,
-              '&:hover': {
-                backgroundColor: 'rgba(0, 45, 98, 0.05)',
+              "&:hover": {
+                backgroundColor: "rgba(0, 45, 98, 0.05)",
               },
             }}
           >
-            <ListItemIcon sx={{ color: location.pathname === item.path ? '#002D62' : '#666' }}>
+            <ListItemIcon
+              sx={{
+                color: location.pathname === item.path ? "#002D62" : "#666",
+              }}
+            >
               {item.icon}
             </ListItemIcon>
             <ListItemText
               primary={item.title}
               sx={{
-                color: location.pathname === item.path ? '#002D62' : '#666',
-                '& .MuiListItemText-primary': {
+                color: location.pathname === item.path ? "#002D62" : "#666",
+                "& .MuiListItemText-primary": {
                   fontWeight: location.pathname === item.path ? 600 : 400,
                 },
               }}
@@ -210,20 +230,20 @@ const Navbar = () => {
                 mb: 1,
                 borderRadius: 2,
                 mx: 1,
-                background: 'linear-gradient(45deg, #002D62 30%, #F9B233 90%)',
-                color: 'white',
-                '&:hover': {
+                background: "linear-gradient(45deg, #002D62 30%, #F9B233 90%)",
+                color: "white",
+                "&:hover": {
                   opacity: 0.9,
                 },
               }}
             >
-              <ListItemIcon sx={{ color: 'white' }}>
+              <ListItemIcon sx={{ color: "white" }}>
                 <LoginRoundedIcon />
               </ListItemIcon>
               <ListItemText
                 primary="Login"
                 sx={{
-                  '& .MuiListItemText-primary': {
+                  "& .MuiListItemText-primary": {
                     fontWeight: 600,
                   },
                 }}
@@ -237,9 +257,9 @@ const Navbar = () => {
                 mb: 1,
                 borderRadius: 2,
                 mx: 1,
-                border: '2px solid #002D62',
-                '&:hover': {
-                  backgroundColor: 'rgba(0, 45, 98, 0.05)',
+                border: "2px solid #002D62",
+                "&:hover": {
+                  backgroundColor: "rgba(0, 45, 98, 0.05)",
                 },
               }}
             >
@@ -249,7 +269,7 @@ const Navbar = () => {
               <ListItemText
                 primary="Register"
                 sx={{
-                  '& .MuiListItemText-primary': {
+                  "& .MuiListItemText-primary": {
                     fontWeight: 600,
                   },
                 }}
@@ -258,6 +278,20 @@ const Navbar = () => {
           </>
         )}
       </List>
+      {isAuthenticated && (
+        <Box sx={{ p: 2, mt: "auto" }}>
+          <LogoutButton
+            fullWidth
+            onClick={() => {
+              handleLogout();
+              handleDrawerToggle();
+            }}
+            startIcon={<LogoutRoundedIcon />}
+          >
+            Logout
+          </LogoutButton>
+        </Box>
+      )}
     </Box>
   );
 
@@ -271,8 +305,8 @@ const Navbar = () => {
         position="fixed"
         sx={{
           py: 1,
-          transform: scrolled ? 'translateY(0)' : 'none',
-          transition: 'transform 0.3s ease',
+          transform: scrolled ? "translateY(0)" : "none",
+          transition: "transform 0.3s ease",
         }}
       >
         <Container maxWidth="xl">
@@ -280,7 +314,7 @@ const Navbar = () => {
             <Logo
               component={Link}
               to="/"
-              sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              sx={{ display: "flex", alignItems: "center", gap: 1 }}
             >
               SundaramProLoan
             </Logo>
@@ -291,12 +325,19 @@ const Navbar = () => {
                 aria-label="open drawer"
                 edge="start"
                 onClick={handleDrawerToggle}
-                sx={{ ml: 'auto' }}
+                sx={{ ml: "auto" }}
               >
                 <MenuIcon />
               </IconButton>
             ) : (
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Box
+                sx={{
+                  ml: "auto",
+                  display: "flex",
+                  gap: 2,
+                  alignItems: "center",
+                }}
+              >
                 {getNavItems().map((item) => (
                   <NavButton
                     key={item.title}
@@ -323,13 +364,13 @@ const Navbar = () => {
                       variant="outlined"
                       startIcon={<PersonAddRoundedIcon />}
                       sx={{
-                        borderRadius: '12px',
-                        textTransform: 'none',
+                        borderRadius: "12px",
+                        textTransform: "none",
                         fontWeight: 600,
                         borderWidth: 2,
-                        '&:hover': {
+                        "&:hover": {
                           borderWidth: 2,
-                          transform: 'translateY(-2px)',
+                          transform: "translateY(-2px)",
                         },
                       }}
                     >
@@ -349,7 +390,6 @@ const Navbar = () => {
           </Toolbar>
         </Container>
       </StyledAppBar>
-
       <Drawer
         variant="temporary"
         anchor="right"
@@ -360,26 +400,12 @@ const Navbar = () => {
         }}
         PaperProps={{
           sx: {
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(10px)',
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            backdropFilter: "blur(10px)",
           },
         }}
       >
         {drawer}
-        {isAuthenticated && (
-          <Box sx={{ p: 2, mt: 'auto' }}>
-            <LogoutButton
-              fullWidth
-              onClick={() => {
-                handleLogout();
-                handleDrawerToggle();
-              }}
-              startIcon={<LogoutRoundedIcon />}
-            >
-              Logout
-            </LogoutButton>
-          </Box>
-        )}
       </Drawer>
       <Toolbar /> {/* Spacer */}
     </motion.div>

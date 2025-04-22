@@ -6,7 +6,7 @@ function ProtectedRoute({ children, roleRequired }) {
 
   try {
     user = userString ? JSON.parse(userString) : null;
-    console.log("ProtectedRoute user:", user); // Debug
+    console.log("ProtectedRoute user:", user); 
   } catch (error) {
     console.error("Error parsing user from localStorage:", error);
     localStorage.removeItem("user");
