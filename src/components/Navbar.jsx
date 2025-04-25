@@ -26,6 +26,7 @@ import PersonAddRoundedIcon from "@mui/icons-material/PersonAddRounded";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import PictureAsPdf from "@mui/icons-material/PictureAsPdf";
 import { motion } from "framer-motion";
 import { toast } from "react-hot-toast";
 
@@ -154,6 +155,11 @@ const Navbar = () => {
           title: "Credit Score",
           path: "/credit-score",
           icon: <CreditScoreRoundedIcon />,
+        },
+        {
+          title: "Document Hub",
+          path: "/documents",
+          icon: <PictureAsPdf />,
         }
       );
       if (userRole === "USER") {
@@ -407,7 +413,7 @@ const Navbar = () => {
       >
         {drawer}
       </Drawer>
-      <Toolbar /> {/* Spacer */}
+      <Toolbar />
     </motion.div>
   );
 };

@@ -1,15 +1,16 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Navbar from "./components/Navbar.jsx";
-import Footer from "./components/Footer.jsx";
-import Home from "./pages/Home.jsx";
-import Register from "./pages/Register.jsx";
-import Login from "./pages/Login.jsx";
-import CreditScoreCheck from "./pages/CreditScoreCheck.jsx";
-import LoanApplication from "./pages/LoanApplication.jsx";
-import Dashboard from "./pages/Dashboard.jsx";
-import ProtectedRoute from "./components/ProtectedRoute.jsx";
-import { ToastContainer } from "react-toastify";
 import { CssBaseline } from "@mui/material";
+import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import Navbar from "./components/Navbar.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import CreditScoreCheck from "./pages/CreditScoreCheck.jsx";
+import Dashboard from "./dashboard/Dashboard.jsx";
+import Home from "./pages/Home.jsx";
+import LoanApplication from "./pages/LoanApplication.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import FooterSection from "./components/FooterSection.jsx";
+import UserDocuments from "./components/UserDocuments";
 
 function App() {
   return (
@@ -37,8 +38,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/documents"
+          element={
+            <ProtectedRoute>
+              <UserDocuments userId={JSON.parse(localStorage.getItem("user") || "{}").id} />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
-      <Footer />
+      <FooterSection />
       <ToastContainer />
     </Router>
   );

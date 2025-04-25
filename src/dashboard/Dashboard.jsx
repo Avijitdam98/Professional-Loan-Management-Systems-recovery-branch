@@ -59,7 +59,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
+import UserDocuments from "../components/UserDocuments";
 function Dashboard() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -194,6 +194,7 @@ function Dashboard() {
     // eslint-disable-next-line
   }, []);
 
+  // Fetch applications
   const fetchApplications = async () => {
     setLoading(true);
     try {
@@ -534,6 +535,9 @@ function Dashboard() {
             </Paper>
           </Grid>
         </Grid>
+
+        {/* --- USER DOCUMENT UPLOAD & VIEW SECTION (as a component) --- */}
+        <UserDocuments userId={user.id} />
 
         {/* --- APPLICATIONS SECTION --- */}
         <Paper
@@ -1018,9 +1022,7 @@ function Dashboard() {
                       variant="contained"
                       color="primary"
                       size="small"
-                      onClick={
-                        () => handlePayEmi(emi.id, emi.applicationId) // <-- CHANGE IS HERE
-                      }
+                      onClick={() => handlePayEmi(emi.id, emi.applicationId)}
                     >
                       Pay EMI
                     </Button>
