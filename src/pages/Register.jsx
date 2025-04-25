@@ -19,8 +19,8 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import { motion } from "framer-motion";
-import { useState } from "react";
+/* import { motion } from "framer-motion";
+ */import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -46,7 +46,7 @@ function Register() {
         formData
       );
       toast.success(response.data?.message || "Registration successful");
-      
+
       // Redirect based on role
       if (formData.role === "ADMIN") {
         navigate("/admin/dashboard");
